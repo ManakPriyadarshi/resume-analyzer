@@ -2,46 +2,64 @@ import streamlit as st
 import pandas as pd
 import re
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB
+
+st.title("AI Resume Analyzer")
 
 # Load dataset
 data = pd.read_csv("ml_resume_dataset_4500.csv")
 
-# Text cleaning
-def clean_text(text):
-    text = re.sub(r"http\S+", "", str(text))
-    text = re.sub(r"[^a-zA-Z ]", "", text)
-    text = text.lower()
-    return text
+# Show dataset columns (for debugging)
+st.write("Dataset Columns:", data.columns)
 
-data["clean_resume"] = data["Resume"].apply(clean_text)
+# Detect resume column automatically
+resume_col = None
+category_col = None
 
-# TF-IDF
-tfidf = TfidfVectorizer(stop_words="english")
-X = tfidf.fit_transform(data["clean_resume"])
+for col in data.columns:
+    if "resume" in col.lower() or "text" in col.lower():
+        resume_col = col
+    if "category" in col.lower() or "label" in col.lower():
+        category_col = col
 
-y = data["Category"]
+if resume_col is None or category_col is None:
+    st.error("Dataset columns not detected correctly")
+else:
 
-# Train model
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    # Clean text function
+    def clean_text(text):
+        text = re.sub(r"http\S+", "", str(text))
+        text = re.sub(r"[^a-zA-Z ]", "", text)
+        text = text.lower()
+        return text
 
-model = MultinomialNB()
-model.fit(X_train, y_train)
+    data["clean_resume"] = data[resume_col].apply(clean_text)
 
-# Streamlit UI
-st.title("AI Resume Analyzer")
+    # TF-IDF
+    tfidf = TfidfVectorizer(stop_words="english")
 
-resume = st.text_area("Paste your resume text")
+    X = tfidf.fit_transform(data["clean_resume"])
+    y = data[category_col]
 
-if st.button("Analyze Resume"):
+    # Train model
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
-    resume_clean = clean_text(resume)
+    model = MultinomialNB()
+    model.fit(X_train, y_train)
 
-    vector = tfidf.transform([resume_clean])
+    # User input
+    resume_input = st.text_area("Paste your resume text")
 
-    prediction = model.predict(vector)
+    if st.button("Analyze Resume"):
 
-    st.success("Predicted Job Role:")
+        resume_clean = clean_text(resume_input)
 
-    st.write(prediction[0])
+        vector = tfidf.transform([resume_clean])
+
+        prediction = model.predict(vector)
+
+        st.success("Predicted Job Role:")
+        st.write(prediction[0])
